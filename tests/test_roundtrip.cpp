@@ -1,0 +1,270 @@
+// Layer 3 tests: block encode/decode roundtrip
+//
+// Tests the full scalar pipeline: encode → decode with the new wire format.
+// Covers all block types: bitpack-only, bitmap outliers, sparse outliers,
+// constant, all-zeros, raw.  Also tests delta-1 encode/decode.
+
+#include "core/block.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <numeric>
+#include <random>
+
+static int failures = 0;
+
+#define CHECK(cond, ...)                                    \
+    do {                                                    \
+        if (!(cond)) {                                      \
+            printf("  FAIL %s:%d: ", __FILE__, __LINE__);   \
+            printf(__VA_ARGS__);                             \
+            printf("\n");                                    \
+            ++failures;                                     \
+        }                                                   \
+    } while (0)
+
+template <typename T>
+static void roundtrip(const T* orig, unsigned n, const char* label, T start = 0, bool useDelta = false)
+{
+    uint8_t buf[4096];
+    T decoded[512];
+
+    std::memset(buf, 0xCC, sizeof(buf));
+    std::memset(decoded, 0xDD, sizeof(decoded));
+
+    size_t written;
+    if (useDelta)
+        written = abpfor::encodeBlockDelta1(orig, n, buf, start);
+    else
+        written = abpfor::encodeBlock(orig, n, buf);
+
+    CHECK(written > 0 && written < sizeof(buf), "%s: written=%zu", label, written);
+
+    size_t consumed;
+    if (useDelta)
+        consumed = abpfor::decodeBlockDelta1(buf, n, decoded, start);
+    else
+        consumed = abpfor::decodeBlock(buf, n, decoded);
+
+    CHECK(consumed == written, "%s: consumed=%zu != written=%zu", label, consumed, written);
+
+    for (unsigned i = 0; i < n; ++i)
+    {
+        if (decoded[i] != orig[i])
+        {
+            CHECK(false, "%s n=%u i=%u: decoded=%llu expected=%llu",
+                  label, n, i, (unsigned long long)decoded[i], (unsigned long long)orig[i]);
+            break;
+        }
+    }
+}
+
+// --- All zeros ---
+
+static void test_zeros()
+{
+    printf("test_zeros...\n");
+    uint32_t data[128] = {};
+    roundtrip(data, 128, "zeros-128");
+
+    uint32_t data2[256] = {};
+    roundtrip(data2, 256, "zeros-256");
+}
+
+// --- Constant ---
+
+static void test_constant()
+{
+    printf("test_constant...\n");
+    uint32_t data[128];
+    std::fill_n(data, 128, 42u);
+    roundtrip(data, 128, "const-42");
+
+    uint32_t data2[128];
+    std::fill_n(data2, 128, 0xDEADBEEFu);
+    roundtrip(data2, 128, "const-large");
+}
+
+// --- Bitpack only (no outliers) ---
+
+static void test_bitpack_only()
+{
+    printf("test_bitpack_only...\n");
+    std::mt19937 rng(1);
+
+    for (unsigned bw : {1, 2, 4, 8, 12, 16, 20, 24, 28, 32})
+    {
+        uint32_t data[128];
+        uint32_t m = abpfor::mask<uint32_t>(bw);
+        for (auto& v : data) v = rng() & m;
+
+        char label[64];
+        snprintf(label, sizeof(label), "bitpack-b%u", bw);
+        roundtrip(data, 128, label);
+    }
+}
+
+// --- Sparse outliers (few exceptions) ---
+
+static void test_sparse_outliers()
+{
+    printf("test_sparse_outliers...\n");
+    uint32_t data[128];
+    for (unsigned i = 0; i < 128; ++i) data[i] = i & 0xF;
+    data[10] = 0xABCD;
+    data[50] = 0x1234;
+    data[90] = 0xFFFF;
+    roundtrip(data, 128, "sparse-3exc");
+}
+
+// --- Bitmap outliers (many exceptions) ---
+
+static void test_bitmap_outliers()
+{
+    printf("test_bitmap_outliers...\n");
+    std::mt19937 rng(42);
+    uint32_t data[128];
+    for (auto& v : data) v = rng() & 0xF;
+    for (unsigned i = 0; i < 25; ++i) data[i * 5] = 0xFFFF;
+    roundtrip(data, 128, "bitmap-25exc");
+}
+
+// --- Delta-1 roundtrip ---
+
+static void test_delta()
+{
+    printf("test_delta...\n");
+    std::mt19937 rng(7);
+
+    // Sorted sequence
+    uint32_t data[128];
+    uint32_t v = 100;
+    for (unsigned i = 0; i < 128; ++i)
+    {
+        v += 1 + (rng() % 10);
+        data[i] = v;
+    }
+    roundtrip(data, 128, "delta-sorted", uint32_t(100), true);
+
+    // Tighter gaps
+    v = 0;
+    for (unsigned i = 0; i < 128; ++i)
+    {
+        v += 1 + (rng() % 3);
+        data[i] = v;
+    }
+    roundtrip(data, 128, "delta-tight", uint32_t(0), true);
+
+    // Sorted with occasional large gap
+    v = 0;
+    for (unsigned i = 0; i < 128; ++i)
+    {
+        v += (rng() % 100 < 5) ? (1000 + rng() % 5000) : (1 + rng() % 5);
+        data[i] = v;
+    }
+    roundtrip(data, 128, "delta-sparse-gaps", uint32_t(0), true);
+}
+
+// --- Various block sizes ---
+
+static void test_various_n()
+{
+    printf("test_various_n...\n");
+    std::mt19937 rng(99);
+
+    for (unsigned n : {1, 2, 7, 15, 16, 31, 32, 63, 64, 100, 127, 128, 200, 255, 256})
+    {
+        uint32_t data[256];
+        for (unsigned i = 0; i < n; ++i) data[i] = rng() & 0xFF;
+
+        char label[64];
+        snprintf(label, sizeof(label), "n=%u", n);
+        roundtrip(data, n, label);
+    }
+}
+
+// --- 64-bit ---
+
+static void test_64bit()
+{
+    printf("test_64bit...\n");
+    std::mt19937_64 rng(123);
+
+    // Small values
+    {
+        uint64_t data[128];
+        for (auto& v : data) v = rng() & 0xFFFF;
+        roundtrip(data, 128, "u64-16bit");
+    }
+
+    // Mix with large outliers
+    {
+        uint64_t data[128];
+        for (auto& v : data) v = rng() & 0xFFFF;
+        data[0] = 1ULL << 50;
+        data[64] = 1ULL << 60;
+        roundtrip(data, 128, "u64-outliers");
+    }
+
+    // 64-bit delta
+    {
+        uint64_t data[128];
+        uint64_t v = 1000000;
+        for (unsigned i = 0; i < 128; ++i)
+        {
+            v += 1 + (rng() % 100);
+            data[i] = v;
+        }
+        roundtrip(data, 128, "u64-delta", uint64_t(1000000), true);
+    }
+}
+
+// --- Sweep: all bit-widths × exception rates ---
+
+static void test_sweep()
+{
+    printf("test_sweep...\n");
+    std::mt19937 rng(42);
+    uint32_t data[128];
+
+    for (unsigned baseBw : {2, 4, 8, 12, 16, 24})
+    {
+        for (unsigned excPct : {0, 3, 10, 25, 50})
+        {
+            uint32_t baseMask = abpfor::mask<uint32_t>(baseBw);
+
+            for (unsigned i = 0; i < 128; ++i)
+            {
+                if (excPct > 0 && (rng() % 100) < excPct)
+                    data[i] = (1u << baseBw) + (rng() & 0xFFFF);
+                else
+                    data[i] = rng() & baseMask;
+            }
+
+            char label[64];
+            snprintf(label, sizeof(label), "sweep-b%u-exc%u%%", baseBw, excPct);
+            roundtrip(data, 128, label);
+        }
+    }
+}
+
+int main()
+{
+    test_zeros();
+    test_constant();
+    test_bitpack_only();
+    test_sparse_outliers();
+    test_bitmap_outliers();
+    test_delta();
+    test_various_n();
+    test_64bit();
+    test_sweep();
+
+    if (failures == 0)
+        printf("All Layer 3 tests passed.\n");
+    else
+        printf("%d Layer 3 test(s) FAILED.\n", failures);
+
+    return failures > 0 ? 1 : 0;
+}
