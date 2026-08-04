@@ -32,7 +32,7 @@ static void test_roundtrip_i8()
     {
         uint32_t m = abpfor::mask<uint32_t>(b);
         for (unsigned i = 0; i < 256; ++i)
-            orig[i] = (b == 0) ? 0 : (rng() & m);
+            orig[i] = (b == 0) ? 0 : static_cast<uint32_t>(rng() & m);
 
         std::memset(packed, 0xCC, sizeof(packed));
         std::memset(decoded, 0xDD, sizeof(decoded));

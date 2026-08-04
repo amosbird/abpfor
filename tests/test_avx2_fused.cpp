@@ -70,7 +70,7 @@ static void test_fused8_delta_only()
     {
         uint32_t m = abpfor::mask<uint32_t>(b);
         uint32_t data[256];
-        for (auto& v : data) v = rng() & m;
+        for (auto& v : data) v = static_cast<uint32_t>(rng() & m);
 
         alignas(32) uint32_t ref[256];
         alignas(32) uint8_t packed[2048];
@@ -147,7 +147,7 @@ static void test_fused8_full()
                 if ((rng() % 100) < excPct)
                     data[i] = (1u << baseBw) + (rng() & 0xFFFF);
                 else
-                    data[i] = rng() & baseMask;
+                    data[i] = static_cast<uint32_t>(rng() & baseMask);
             }
 
             TestBlock8 blk;
@@ -230,7 +230,7 @@ static void test_fused8_carry_chain_minusone_false()
         // a constant shows up as a growing error, not a single bad element.
         uint32_t data[4][256];
         for (auto& blk : data)
-            for (auto& v : blk) v = rng() & m;
+            for (auto& v : blk) v = static_cast<uint32_t>(rng() & m);
 
         alignas(32) uint32_t ref[4][256];
         alignas(32) uint8_t packed[4][2048];

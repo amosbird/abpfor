@@ -42,7 +42,7 @@ static void test_pack32_roundtrip()
         {
             // Fill with random values that fit in b bits
             for (unsigned i = 0; i < n; ++i)
-                orig[i] = (b == 0) ? 0 : (rng() & m);
+                orig[i] = (b == 0) ? 0 : static_cast<uint32_t>(rng() & m);
 
             std::memset(packed, 0xCC, sizeof(packed));
             std::memset(decoded, 0xDD, sizeof(decoded));
@@ -110,7 +110,7 @@ static void test_pack64_roundtrip()
             {
                 CHECK(decoded[i] == orig[i],
                       "b=%u n=%u i=%u: decoded=%llu expected=%llu",
-                      b, n, i, (unsigned long long)decoded[i], (unsigned long long)orig[i]);
+                      b, n, i, static_cast<unsigned long long>(decoded[i]), static_cast<unsigned long long>(orig[i]));
                 if (decoded[i] != orig[i]) break;
             }
         }
@@ -180,7 +180,7 @@ static void test_unpack_read_bounds()
 {
     printf("test_unpack_read_bounds...\n");
 
-    const long pageSize = sysconf(_SC_PAGESIZE);
+    const size_t pageSize = static_cast<size_t>(sysconf(_SC_PAGESIZE));
     std::mt19937 rng(1234);
     uint32_t orig[128];
     uint32_t decoded[128];
@@ -189,7 +189,7 @@ static void test_unpack_read_bounds()
     for (unsigned b = 1; b <= 32; ++b)
     {
         uint32_t m = abpfor::mask<uint32_t>(b);
-        for (unsigned i = 0; i < 128; ++i) orig[i] = rng() & m;
+        for (unsigned i = 0; i < 128; ++i) orig[i] = static_cast<uint32_t>(rng() & m);
 
         for (unsigned n = 1; n <= 128; ++n)
         {

@@ -278,9 +278,12 @@ __attribute__((noinline)) static unsigned char* pack_b3_loop(const uint32_t* __r
     {
         uint32_t v = (in[0] & 7) | ((in[1] & 7) << 3) | ((in[2] & 7) << 6) | ((in[3] & 7) << 9) | ((in[4] & 7) << 12) |
                      ((in[5] & 7) << 15) | ((in[6] & 7) << 18) | ((in[7] & 7) << 21);
-        out[0] = v;
-        out[1] = v >> 8;
-        out[2] = v >> 16;
+        // 8 values x 3 bits = 24 significant bits, so v < 2^24 and the three byte
+        // stores below cover it exactly: bits 24..31 are always zero, and the
+        // uint32_t -> unsigned char narrowing discards nothing.
+        out[0] = static_cast<unsigned char>(v);
+        out[1] = static_cast<unsigned char>(v >> 8);
+        out[2] = static_cast<unsigned char>(v >> 16);
         out += 3;
         in += 8;
     }
@@ -898,7 +901,16 @@ template <bool MinusOne = false, size_t... I>
 static ABPFOR_INLINE void unpack_delta_b8_emit(const unsigned char* __restrict in, uint32_t* __restrict out,
                                                uint32_t& acc, std::index_sequence<I...>)
 {
-    ((acc += static_cast<uint32_t>(in[static_cast<unsigned>(I)]), out[I] = acc + (MinusOne ? (static_cast<unsigned>(I) + 1u) : 0u)), ...);
+    // A lambda per element rather than a comma-operator fold: identical codegen
+    // (verified by comparing generated assembly), but the sequencing is explicit
+    // instead of leaning on the comma operator, which reads as a typo to both
+    // humans and -Wcomma.
+    const auto step = [&](unsigned i)
+    {
+        acc += static_cast<uint32_t>(in[i]);
+        out[i] = acc + (MinusOne ? (i + 1u) : 0u);
+    };
+    (step(static_cast<unsigned>(I)), ...);
 }
 
 template <bool MinusOne = false>
@@ -913,9 +925,12 @@ template <bool MinusOne = false, size_t... I>
 static ABPFOR_INLINE void unpack_delta_b16_emit(const unsigned char* __restrict in, uint32_t* __restrict out,
                                                 uint32_t& acc, std::index_sequence<I...>)
 {
-    ((acc += static_cast<uint32_t>(loadU16Fast(in + 2u * static_cast<unsigned>(I))),
-      out[I] = acc + (MinusOne ? (static_cast<unsigned>(I) + 1u) : 0u)),
-     ...);
+    const auto step = [&](unsigned i)
+    {
+        acc += static_cast<uint32_t>(loadU16Fast(in + 2u * i));
+        out[i] = acc + (MinusOne ? (i + 1u) : 0u);
+    };
+    (step(static_cast<unsigned>(I)), ...);
 }
 
 template <bool MinusOne = false>

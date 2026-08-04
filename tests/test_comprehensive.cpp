@@ -88,7 +88,7 @@ static void rt(EncFn<T> enc, DecFn<T> dec, const T* data, unsigned n, const char
         if (out[i] != data[i])
         {
             CHECK(false, "%s i=%u: got=%llu expected=%llu",
-                  label, i, (unsigned long long)out[i], (unsigned long long)data[i]);
+                  label, i, static_cast<unsigned long long>(out[i]), static_cast<unsigned long long>(data[i]));
             break;
         }
     }
@@ -108,7 +108,7 @@ static void rtd(EncDFn<T> enc, DecDFn<T> dec, const T* data, unsigned n, const c
         if (out[i] != data[i])
         {
             CHECK(false, "%s i=%u: got=%llu expected=%llu",
-                  label, i, (unsigned long long)out[i], (unsigned long long)data[i]);
+                  label, i, static_cast<unsigned long long>(out[i]), static_cast<unsigned long long>(data[i]));
             break;
         }
     }
@@ -221,9 +221,9 @@ static void test_b128_outliers()
         for (unsigned i = 0; i < 128; ++i)
         {
             if ((rng() % 100) < excPct)
-                v += 1000 + rng() % 50000;
+                v += 1000 + static_cast<uint32_t>(rng() % 50000);
             else
-                v += 1 + rng() % 5;
+                v += 1 + static_cast<uint32_t>(rng() % 5);
             data[i] = v;
         }
         char label[64];
@@ -250,7 +250,7 @@ static void test_b256_all()
     }
 
     // n=600 (tail handling)
-    for (unsigned bw : {4, 8, 16, 24, 32})
+    for (unsigned bw : {4u, 8u, 16u, 24u, 32u})
     {
         uint32_t data[600];
         makeRandom<uint32_t>(data, 600, bw, 77 + bw);
@@ -286,9 +286,9 @@ static void test_b256_delta_outliers()
         for (unsigned i = 0; i < 256; ++i)
         {
             if ((rng() % 100) < excPct)
-                v += 1000 + rng() % 50000;
+                v += 1000 + static_cast<uint32_t>(rng() % 50000);
             else
-                v += 1 + rng() % 5;
+                v += 1 + static_cast<uint32_t>(rng() % 5);
             data[i] = v;
         }
         char label[64];
@@ -379,8 +379,8 @@ static void test_stress()
         std::mt19937 rng(trial);
 
         unsigned n = 1 + rng() % 256;
-        unsigned bw = rng() % 33;
-        unsigned excPct = rng() % 60;
+        unsigned bw = static_cast<unsigned>(rng() % 33);
+        unsigned excPct = static_cast<unsigned>(rng() % 60);
 
         uint32_t data[256];
         makeRandomWithOutliers<uint32_t>(data, n, bw, excPct, trial * 7 + 1);

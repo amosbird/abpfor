@@ -46,7 +46,7 @@ void rt(EncDFn<T> enc, DecDFn<T> dec, const T* data, unsigned n, const char* lab
         {
             if (data[i] != out[i])
                 printf("    [%u] expected %llu got %llu\n", i,
-                       (unsigned long long)data[i], (unsigned long long)out[i]);
+                       static_cast<unsigned long long>(data[i]), static_cast<unsigned long long>(out[i]));
         }
     }
 }
@@ -67,8 +67,8 @@ int main()
     {
         uint32_t data[200];
         std::mt19937 rng(42);
-        data[0] = rng() % 1000;
-        for (unsigned i = 1; i < 200; ++i) data[i] = data[i - 1] + rng() % 10000;
+        data[0] = static_cast<uint32_t>(rng() % 1000);
+        for (unsigned i = 1; i < 200; ++i) data[i] = data[i - 1] + static_cast<uint32_t>(rng() % 10000);
         rt<uint32_t>(abpfor::b128::encodeDelta0, abpfor::b128::decodeDelta0, data, 200, "b128-d0-large", uint32_t(0));
     }
 

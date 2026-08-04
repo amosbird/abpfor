@@ -81,7 +81,7 @@ static void test_fused_delta_only()
     {
         uint32_t m = abpfor::mask<uint32_t>(b);
         uint32_t data[128];
-        for (auto& v : data) v = rng() & m;
+        for (auto& v : data) v = static_cast<uint32_t>(rng() & m);
 
         // Reference: unpack then scalar undelta
         alignas(16) uint32_t ref[128];
@@ -164,7 +164,7 @@ static void test_fused_full()
                 if ((rng() % 100) < excPct)
                     data[i] = (1u << baseBw) + (rng() & 0xFFFF);
                 else
-                    data[i] = rng() & baseMask;
+                    data[i] = static_cast<uint32_t>(rng() & baseMask);
             }
 
             TestBlock blk;

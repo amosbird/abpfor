@@ -2,12 +2,15 @@
 
 // Template implementation for b128 and b256 API. Instantiated in
 // api_b128.cpp and api_b256.cpp with BS=128/256 respectively.
+//
+// Every helper here returns size_t, matching the public API. A single block's
+// output is bounded (~2 KiB), but nothing is gained by returning a narrower type
+// -- see the RETURN VALUES note in abpfor.h.
 
 #include "abpfor.h"
 #include "detail/codec.h"
 #include "core/block.h"
 #include "core/delta.h"
-#include <cassert>
 
 namespace abpfor::detail
 {
@@ -84,42 +87,36 @@ size_t apiDecodeBlockDelta1(const uint8_t* in, T* out, T start)
 template <unsigned BS, typename T>
 size_t apiEncodeTail(const T* in, unsigned n, uint8_t* out)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::encodeBlock(in, n, out);
 }
 
 template <unsigned BS, typename T>
 size_t apiEncodeTailDelta0(const T* in, unsigned n, uint8_t* out, T start)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::encodeBlockDelta0(in, n, out, start);
 }
 
 template <unsigned BS, typename T>
 size_t apiEncodeTailDelta1(const T* in, unsigned n, uint8_t* out, T start)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::encodeBlockDelta1(in, n, out, start);
 }
 
 template <unsigned BS, typename T>
 size_t apiDecodeTail(const uint8_t* in, unsigned n, T* out)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::decodeBlock(in, n, out);
 }
 
 template <unsigned BS, typename T>
 size_t apiDecodeTailDelta0(const uint8_t* in, unsigned n, T* out, T carry)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::decodeBlockDelta0(in, n, out, carry);
 }
 
 template <unsigned BS, typename T>
 size_t apiDecodeTailDelta1(const uint8_t* in, unsigned n, T* out, T carry)
 {
-    assert(n < BS && "tail must be < block size");
     return abpfor::decodeBlockDelta1(in, n, out, carry);
 }
 

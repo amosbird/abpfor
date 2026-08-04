@@ -54,7 +54,7 @@ static void roundtrip(const T* orig, unsigned n, const char* label, T start = 0,
         if (decoded[i] != orig[i])
         {
             CHECK(false, "%s n=%u i=%u: decoded=%llu expected=%llu",
-                  label, n, i, (unsigned long long)decoded[i], (unsigned long long)orig[i]);
+                  label, n, i, static_cast<unsigned long long>(decoded[i]), static_cast<unsigned long long>(orig[i]));
             break;
         }
     }
@@ -93,11 +93,11 @@ static void test_bitpack_only()
     printf("test_bitpack_only...\n");
     std::mt19937 rng(1);
 
-    for (unsigned bw : {1, 2, 4, 8, 12, 16, 20, 24, 28, 32})
+    for (unsigned bw : {1u, 2u, 4u, 8u, 12u, 16u, 20u, 24u, 28u, 32u})
     {
         uint32_t data[128];
         uint32_t m = abpfor::mask<uint32_t>(bw);
-        for (auto& v : data) v = rng() & m;
+        for (auto& v : data) v = static_cast<uint32_t>(rng() & m);
 
         char label[64];
         snprintf(label, sizeof(label), "bitpack-b%u", bw);
@@ -142,7 +142,7 @@ static void test_delta()
     uint32_t v = 100;
     for (unsigned i = 0; i < 128; ++i)
     {
-        v += 1 + (rng() % 10);
+        v += 1 + static_cast<uint32_t>(rng() % 10);
         data[i] = v;
     }
     roundtrip(data, 128, "delta-sorted", uint32_t(100), true);
@@ -151,7 +151,7 @@ static void test_delta()
     v = 0;
     for (unsigned i = 0; i < 128; ++i)
     {
-        v += 1 + (rng() % 3);
+        v += 1 + static_cast<uint32_t>(rng() % 3);
         data[i] = v;
     }
     roundtrip(data, 128, "delta-tight", uint32_t(0), true);
@@ -160,7 +160,7 @@ static void test_delta()
     v = 0;
     for (unsigned i = 0; i < 128; ++i)
     {
-        v += (rng() % 100 < 5) ? (1000 + rng() % 5000) : (1 + rng() % 5);
+        v += (rng() % 100 < 5) ? static_cast<uint32_t>(1000 + rng() % 5000) : static_cast<uint32_t>(1 + rng() % 5);
         data[i] = v;
     }
     roundtrip(data, 128, "delta-sparse-gaps", uint32_t(0), true);
@@ -173,7 +173,7 @@ static void test_various_n()
     printf("test_various_n...\n");
     std::mt19937 rng(99);
 
-    for (unsigned n : {1, 2, 7, 15, 16, 31, 32, 63, 64, 100, 127, 128, 200, 255, 256})
+    for (unsigned n : {1u, 2u, 7u, 15u, 16u, 31u, 32u, 63u, 64u, 100u, 127u, 128u, 200u, 255u, 256u})
     {
         uint32_t data[256];
         for (unsigned i = 0; i < n; ++i) data[i] = rng() & 0xFF;
@@ -228,9 +228,9 @@ static void test_sweep()
     std::mt19937 rng(42);
     uint32_t data[128];
 
-    for (unsigned baseBw : {2, 4, 8, 12, 16, 24})
+    for (unsigned baseBw : {2u, 4u, 8u, 12u, 16u, 24u})
     {
-        for (unsigned excPct : {0, 3, 10, 25, 50})
+        for (unsigned excPct : {0u, 3u, 10u, 25u, 50u})
         {
             uint32_t baseMask = abpfor::mask<uint32_t>(baseBw);
 
@@ -239,7 +239,7 @@ static void test_sweep()
                 if (excPct > 0 && (rng() % 100) < excPct)
                     data[i] = (1u << baseBw) + (rng() & 0xFFFF);
                 else
-                    data[i] = rng() & baseMask;
+                    data[i] = static_cast<uint32_t>(rng() & baseMask);
             }
 
             char label[64];
@@ -278,7 +278,8 @@ static void test_raw_delta()
     {
         uint32_t data[128];
         std::mt19937 rng(2024);
-        for (auto& x : data) x = rng();   // full-width -> kRaw
+        // mt19937::result_type is uint_fast32_t (64-bit here), hence the cast.
+        for (auto& x : data) x = static_cast<uint32_t>(rng());   // full-width -> kRaw
         roundtrip(data, 128, "raw-nodelta-u32");
     }
 }

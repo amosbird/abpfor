@@ -16,6 +16,7 @@
 #include <random>
 
 #include <vector>
+#include <tuple>
 
 // --- Scalar reference primitives (copied from test_cross_platform.cpp) ---
 namespace scalar_ref {
@@ -142,7 +143,6 @@ template <unsigned BlockSize>
 size_t decodeBlock(const uint8_t* in, unsigned n, uint32_t* out, bool useDelta, uint32_t& carry)
 {
     static_assert(BlockSize == 128 || BlockSize == 256);
-    constexpr unsigned Lanes = BlockSize / 32;
 
     const uint8_t* ip = in;
     uint8_t h = *ip++;
@@ -303,7 +303,7 @@ static std::vector<uint32_t> randomValues(unsigned count, unsigned maxBits)
 {
     std::vector<uint32_t> v(count);
     uint32_t mask = maxBits == 32 ? ~0u : (1u << maxBits) - 1u;
-    for (auto& x : v) x = rng() & mask;
+    for (auto& x : v) x = static_cast<uint32_t>(rng() & mask);
     return v;
 }
 
@@ -426,7 +426,7 @@ static void testOutlierPaths()
         auto input = randomValues(N, 4); // base: 4 bits
         // Inject a few outliers
         for (unsigned i = 0; i < N; i += 17)
-            input[i] = rng() | (1u << 20); // needs >20 bits
+            input[i] = static_cast<uint32_t>(rng()) | (1u << 20); // needs >20 bits
         std::vector<uint8_t> buf(N * 5);
         std::vector<uint32_t> out(N);
 
@@ -444,7 +444,7 @@ static void testOutlierPaths()
         auto input = randomValues(N, 8); // base: 8 bits
         // Make ~40% of values outliers
         for (unsigned i = 0; i < N; i += 3)
-            input[i] |= (rng() & 0xFFu) << 8;
+            input[i] |= static_cast<uint32_t>(rng() & 0xFFu) << 8;
         std::vector<uint8_t> buf(N * 5);
         std::vector<uint32_t> out(N);
 
@@ -472,7 +472,7 @@ static void testEdgeCases()
         std::vector<uint8_t> buf(N * 5);
         std::vector<uint32_t> out(N, 0xDEADBEEF);
 
-        abpfor::b128::encode(input.data(), N, buf.data());
+        std::ignore = abpfor::b128::encode(input.data(), N, buf.data());
         scalar_block::decode<128, false>(
             buf.data(), N, out.data(), uint32_t(0));
         for (unsigned i = 0; i < N; ++i)
@@ -485,7 +485,7 @@ static void testEdgeCases()
         std::vector<uint8_t> buf(N * 5);
         std::vector<uint32_t> out(N, 0);
 
-        abpfor::b128::encode(input.data(), N, buf.data());
+        std::ignore = abpfor::b128::encode(input.data(), N, buf.data());
         scalar_block::decode<128, false>(
             buf.data(), N, out.data(), uint32_t(0));
         for (unsigned i = 0; i < N; ++i)
@@ -499,7 +499,7 @@ static void testEdgeCases()
         std::vector<uint8_t> buf(N * 5);
         std::vector<uint32_t> out(N, 0);
 
-        abpfor::b128::encodeDelta1(input.data(), N, buf.data(), uint32_t(0));
+        std::ignore = abpfor::b128::encodeDelta1(input.data(), N, buf.data(), uint32_t(0));
         scalar_block::decode<128, true>(
             buf.data(), N, out.data(), uint32_t(0));
         for (unsigned i = 0; i < N; ++i)

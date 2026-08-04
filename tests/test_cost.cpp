@@ -108,6 +108,8 @@ static void test_sparse_wins()
     // Sparse: pbx = outlierBits (1..W), not 0, not W+1, not W+2
     CHECK(pbx > 0 && pbx <= 32, "expected sparse pbx, got %u", pbx);
     CHECK(pbx != 33, "should not be bitmap");
+    // Base width must stay narrow: outliers are what the exception path is for.
+    CHECK(b > 0 && b <= 16, "baseBits=%u", b);
 }
 
 // --- Many outliers → bitmap wins ---
@@ -126,6 +128,7 @@ static void test_bitmap_wins()
     // With 30 outliers bitmap (W+1=33) should win
     if (pbx != 0) // might choose no-outlier at higher b
         CHECK(pbx == 33, "expected bitmap (33), got pbx=%u", pbx);
+    CHECK(b <= 32, "baseBits=%u out of range", b);
 }
 
 // --- Cost is actually minimal ---
@@ -138,17 +141,17 @@ static void test_cost_minimal()
 
     for (unsigned trial = 0; trial < 100; ++trial)
     {
-        unsigned baseBw = 2 + (rng() % 20);
-        unsigned excBw = baseBw + 2 + (rng() % 10);
+        unsigned baseBw = 2 + static_cast<unsigned>(rng() % 20);
+        unsigned excBw = baseBw + 2 + static_cast<unsigned>(rng() % 10);
         if (excBw > 32) excBw = 32;
-        unsigned excPct = 1 + (rng() % 30);
+        unsigned excPct = 1 + static_cast<unsigned>(rng() % 30);
 
         for (unsigned i = 0; i < 128; ++i)
         {
             if ((rng() % 100) < excPct)
-                data[i] = (1u << (excBw - 1)) | (rng() & abpfor::mask<uint32_t>(excBw));
+                data[i] = (1u << (excBw - 1)) | static_cast<uint32_t>(rng() & abpfor::mask<uint32_t>(excBw));
             else
-                data[i] = rng() & abpfor::mask<uint32_t>(baseBw);
+                data[i] = static_cast<uint32_t>(rng() & abpfor::mask<uint32_t>(baseBw));
         }
 
         unsigned pbx;
@@ -212,6 +215,8 @@ static void test_cost_64bit()
     // 2 outliers → sparse (pbx = outlierBits, 1..64)
     CHECK(pbx > 0 && pbx <= 64, "expected sparse pbx, got %u", pbx);
     CHECK(pbx != 65, "should not be bitmap (W+1=65)");
+    // Base is16-bit data, so the chosen base width must not blow up to 64.
+    CHECK(b > 0 && b <= 32, "baseBits=%u", b);
 }
 
 // --- n=256 crossover point ---
@@ -229,6 +234,7 @@ static void test_crossover_256()
     if (pbx != 0) // not no-outlier
         CHECK(pbx > 0 && pbx <= 32 && pbx != 33,
               "10 outliers in 256: expected Sparse, got pbx=%u", pbx);
+    CHECK(b <= 32, "baseBits=%u out of range", b);
 
     // 40 outliers → bitmap should win
     for (unsigned i = 0; i < 256; ++i) data[i] = i & 0x7;
@@ -236,6 +242,7 @@ static void test_crossover_256()
     b = abpfor::optimalWidth<uint32_t>(data, 256, &pbx);
     if (pbx != 0)
         CHECK(pbx == 33, "40 outliers in 256: expected Bitmap (33), got pbx=%u", pbx);
+    CHECK(b <= 32, "baseBits=%u out of range", b);
 }
 
 int main()

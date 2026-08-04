@@ -58,7 +58,7 @@ static void rt(EncodeFn<T> enc, DecodeFn<T> dec, const T* data, unsigned n, cons
         if (out[i] != data[i])
         {
             CHECK(false, "%s i=%u: got=%llu expected=%llu",
-                  label, i, (unsigned long long)out[i], (unsigned long long)data[i]);
+                  label, i, static_cast<unsigned long long>(out[i]), static_cast<unsigned long long>(data[i]));
             break;
         }
     }
@@ -81,7 +81,7 @@ static void rtd(EncodeDeltaFn<T> enc, DecodeDeltaFn<T> dec, const T* data, unsig
         if (out[i] != data[i])
         {
             CHECK(false, "%s i=%u: got=%llu expected=%llu",
-                  label, i, (unsigned long long)out[i], (unsigned long long)data[i]);
+                  label, i, static_cast<unsigned long long>(out[i]), static_cast<unsigned long long>(data[i]));
             break;
         }
     }
@@ -109,7 +109,7 @@ static void test_b128()
     {
         uint32_t sorted[200];
         uint32_t v = 50;
-        for (unsigned i = 0; i < 200; ++i) { v += 1 + (rng() % 10); sorted[i] = v; }
+        for (unsigned i = 0; i < 200; ++i) { v += 1 + static_cast<uint32_t>(rng() % 10); sorted[i] = v; }
         rtd<uint32_t>(abpfor::b128::encodeDelta1, abpfor::b128::decodeDelta1, sorted, 200, "b128-d1-200", uint32_t(50));
     }
 
@@ -117,7 +117,7 @@ static void test_b128()
     {
         uint32_t sorted[200];
         uint32_t v = 50;
-        for (unsigned i = 0; i < 200; ++i) { v += rng() % 10; sorted[i] = v; }
+        for (unsigned i = 0; i < 200; ++i) { v += static_cast<uint32_t>(rng() % 10); sorted[i] = v; }
         rtd<uint32_t>(abpfor::b128::encodeDelta0, abpfor::b128::decodeDelta0, sorted, 200, "b128-d0-200", uint32_t(50));
     }
 
@@ -144,7 +144,7 @@ static void test_b128()
         uint32_t v2 = 0;
         for (unsigned i = 0; i < 128; ++i)
         {
-            v2 += (rng() % 100 < 5) ? (1000 + rng() % 5000) : (1 + rng() % 3);
+            v2 += (rng() % 100 < 5) ? static_cast<uint32_t>(1000 + rng() % 5000) : static_cast<uint32_t>(1 + rng() % 3);
             sorted[i] = v2;
         }
         rtd<uint32_t>(abpfor::b128::encodeDelta1, abpfor::b128::decodeDelta1, sorted, 128, "b128-d1-outliers", uint32_t(0));
@@ -183,7 +183,7 @@ static void test_b256()
     {
         uint32_t sorted[600];
         uint32_t v = 0;
-        for (unsigned i = 0; i < 600; ++i) { v += 1 + (rng() % 5); sorted[i] = v; }
+        for (unsigned i = 0; i < 600; ++i) { v += 1 + static_cast<uint32_t>(rng() % 5); sorted[i] = v; }
         rtd<uint32_t>(abpfor::b256::encodeDelta1, abpfor::b256::decodeDelta1, sorted, 600, "b256-d1-600", uint32_t(0));
     }
 }
@@ -282,18 +282,18 @@ static void test_sweep()
     printf("test_sweep...\n");
     std::mt19937 rng(42);
 
-    for (unsigned bw : {2, 4, 8, 16, 24, 32})
+    for (unsigned bw : {2u, 4u, 8u, 16u, 24u, 32u})
     {
-        for (unsigned excPct : {0, 5, 15, 30})
+        for (unsigned excPct : {0u, 5u, 15u, 30u})
         {
             uint32_t data[128];
             uint32_t baseMask = bw == 32 ? ~0u : (1u << bw) - 1u;
             for (unsigned i = 0; i < 128; ++i)
             {
                 if (excPct > 0 && (rng() % 100) < excPct)
-                    data[i] = (bw < 32 ? (1u << bw) : 0u) + (rng() & 0xFFFF);
+                    data[i] = (bw < 32 ? (1u << bw) : 0u) + static_cast<uint32_t>(rng() & 0xFFFF);
                 else
-                    data[i] = rng() & baseMask;
+                    data[i] = static_cast<uint32_t>(rng() & baseMask);
             }
 
             char label[64];
@@ -543,7 +543,7 @@ static void test_b256_bitmap_encode_byte_identity()
 
 // --- Block-level API ---
 
-void test_encodeBlock_public()
+static void test_encodeBlock_public()
 {
     printf("test_encodeBlock_public...\n");
     uint32_t data[256];

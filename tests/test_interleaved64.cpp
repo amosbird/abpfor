@@ -45,7 +45,7 @@ void rt(EncFn<T> enc, DecFn<T> dec, const T* data, unsigned n, const char* label
         for (unsigned i = 0; i < n && i < 8; ++i)
             if (data[i] != out[i])
                 printf("    [%u] expected %llu got %llu\n", i,
-                       (unsigned long long)data[i], (unsigned long long)out[i]);
+                       static_cast<unsigned long long>(data[i]), static_cast<unsigned long long>(out[i]));
 }
 
 template <typename T>
@@ -63,7 +63,7 @@ void rtd(EncDFn<T> enc, DecDFn<T> dec, const T* data, unsigned n, const char* la
         for (unsigned i = 0; i < n && i < 8; ++i)
             if (data[i] != out[i])
                 printf("    [%u] expected %llu got %llu\n", i,
-                       (unsigned long long)data[i], (unsigned long long)out[i]);
+                       static_cast<unsigned long long>(data[i]), static_cast<unsigned long long>(out[i]));
 }
 
 template <typename T>

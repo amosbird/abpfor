@@ -45,6 +45,8 @@ constexpr uint8_t kRaw = 63;    // type=11 b=63: uncompressed raw data
 // ---------------------------------------------------------------------------
 // encodeBlock — encode n values into a compressed block
 // ---------------------------------------------------------------------------
+// `n` must be <= 256: the outlier path below uses fixed 256-element scratch
+// arrays.
 // Forward declarations (delta variants call the non-delta overloads)
 template <typename T> size_t encodeBlock(const T* in, unsigned n, uint8_t* out);
 template <typename T> size_t decodeBlock(const uint8_t* in, unsigned n, T* out);

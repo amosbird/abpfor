@@ -147,7 +147,7 @@ static std::vector<uint32_t> randomValues(unsigned count, unsigned bits)
 {
     std::vector<uint32_t> v(count);
     uint32_t mask = bits == 32 ? ~0u : (1u << bits) - 1u;
-    for (auto& x : v) x = rng() & mask;
+    for (auto& x : v) x = static_cast<uint32_t>(rng() & mask);
     return v;
 }
 
@@ -250,7 +250,7 @@ static void testFusedDecodeCompatibility()
             uint32_t mask = (1u << b) - 1u;
             uint32_t running = 0;
             for (unsigned i = 0; i < 128; ++i) {
-                gaps[i] = rng() & mask;
+                gaps[i] = static_cast<uint32_t>(rng() & mask);
                 running += gaps[i] + 1;
                 sorted[i] = running;
             }
@@ -323,20 +323,15 @@ static void testScalarRoundtrip()
     for (unsigned b = 1; b <= 31; ++b) {
         uint32_t mask = (1u << b) - 1u;
         uint32_t gaps[128];
-        uint32_t sorted[128];
         uint64_t bitmap[2] = {0, 0};
         std::vector<uint32_t> residuals;
 
-        uint32_t running = 0;
-        for (unsigned i = 0; i < 128; ++i) {
-            gaps[i] = rng() & mask;
-            running += gaps[i] + 1;
-            sorted[i] = running;
-        }
+        for (unsigned i = 0; i < 128; ++i)
+            gaps[i] = static_cast<uint32_t>(rng() & mask);
         // Add patches on top
         for (unsigned i = 0; i < 128; i += 11) {
             bitmap[i / 64] |= uint64_t(1) << (i % 64);
-            uint32_t res = rng() & 0xFFu;
+            uint32_t res = static_cast<uint32_t>(rng() & 0xFFu);
             residuals.push_back(res);
         }
         // Recompute expected with patches applied during delta decode
@@ -366,7 +361,7 @@ static void testScalarRoundtrip()
         uint32_t sorted[256];
         uint32_t running = 0;
         for (unsigned i = 0; i < 256; ++i) {
-            gaps[i] = rng() & mask;
+            gaps[i] = static_cast<uint32_t>(rng() & mask);
             running += gaps[i] + 1;
             sorted[i] = running;
         }

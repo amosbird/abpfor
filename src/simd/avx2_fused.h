@@ -97,12 +97,14 @@ ABPFOR_INLINE __m256i avx2Scatter(const uint32_t*& pex, unsigned mask8, unsigned
 
     // Load up to 8 contiguous residuals (may over-read, safe with padding)
     __m128i excLo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pex));
-    unsigned loCount = __builtin_popcount(loNib);
+    // popcount of a 4-bit nibble is 0..4, so the int -> unsigned narrowing is exact.
+    unsigned loCount = static_cast<unsigned>(__builtin_popcount(loNib));
     __m128i excHi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(pex + loCount));
 
-    // Shift residuals left by B bits
-    __m128i excLoShifted = _mm_slli_epi32(excLo, B);
-    __m128i excHiShifted = _mm_slli_epi32(excHi, B);
+    // Shift residuals left by B bits. B is a bit width (0..64), so it always fits
+    // the int shift-count the intrinsic takes.
+    __m128i excLoShifted = _mm_slli_epi32(excLo, static_cast<int>(B));
+    __m128i excHiShifted = _mm_slli_epi32(excHi, static_cast<int>(B));
 
     // Scatter via LUT
     __m128i maskLo = _mm_load_si128(reinterpret_cast<const __m128i*>(detail::kScatterLUT8[loNib]));
@@ -114,7 +116,8 @@ ABPFOR_INLINE __m256i avx2Scatter(const uint32_t*& pex, unsigned mask8, unsigned
     // Combine into __m256i
     __m256i result = _mm256_inserti128_si256(_mm256_castsi128_si256(scatLo), scatHi, 1);
 
-    pex += loCount + __builtin_popcount(hiNib);
+    // Same 0..4 popcount bound as loCount above: the int -> unsigned cast is exact.
+    pex += loCount + static_cast<unsigned>(__builtin_popcount(hiNib));
 
     return result;
 }
