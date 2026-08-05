@@ -360,8 +360,10 @@ template <typename T> size_t decodeBlockDelta1(const uint8_t* in, unsigned n, T*
         return 1;
     }
 
-    // Constant: b = bitwidth, followed by ceil(b/8) value bytes
-    if (type == hdr::kSpecial && b != hdr::kAllZero)
+    // Constant: b = bitwidth, followed by ceil(b/8) value bytes.
+    // kRaw (b=63) must be excluded: it stores n*sizeof(T) raw bytes, not a
+    // constant, so it falls through to decodeBlock below (memcpy + undelta).
+    if (type == hdr::kSpecial && b != hdr::kAllZero && b != hdr::kRaw)
     {
         T val = loadu<T>(reinterpret_cast<const uint8_t*>(in + 1)) & mask<T>(b); // reads LE
         unsigned valBytes = (b + 7u) >> 3;
@@ -370,7 +372,8 @@ template <typename T> size_t decodeBlockDelta1(const uint8_t* in, unsigned n, T*
         return 1 + valBytes;
     }
 
-    // Outlier path: decode base+exceptions, then apply delta
+    // Outlier path: decode base+exceptions, then apply delta.
+    // Also handles kRaw blocks via decodeBlock's memcpy path.
     size_t consumed = decodeBlock(in, n, out);
     for (unsigned i = 0; i < n; ++i) out[i] = (start += out[i]) + T(i + 1u);
     return consumed;

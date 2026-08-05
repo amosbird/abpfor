@@ -249,6 +249,40 @@ static void test_sweep()
     }
 }
 
+// --- Raw block via delta1 (regression: kRaw header 0xFF must not be
+//     mistaken for a constant block) ---
+static void test_raw_delta()
+{
+    printf("test_raw_delta...\n");
+
+    // uint64_t sorted ascending with a 64-bit stride forces encodeBlock to
+    // pick the kRaw path (constant value has bitwidth 64 >= kRaw=63).
+    {
+        uint64_t data[16];
+        const uint64_t stride = (1ULL << 63) + 1;
+        uint64_t v = 5;
+        for (unsigned i = 0; i < 16; ++i) { v += stride; data[i] = v; }
+        roundtrip(data, 16, "raw-delta-u64", uint64_t(5), true);
+    }
+
+    // uint32_t: a stride whose delta bitwidth is 32 (>= kRaw=63 triggers raw).
+    {
+        uint32_t data[16];
+        const uint32_t stride = (1u << 31) + 1;
+        uint32_t v = 3;
+        for (unsigned i = 0; i < 16; ++i) { v += stride; data[i] = v; }
+        roundtrip(data, 16, "raw-delta-u32", uint32_t(3), true);
+    }
+
+    // Non-delta raw block (bitpack-only with b >= W) roundtrips too.
+    {
+        uint32_t data[128];
+        std::mt19937 rng(2024);
+        for (auto& x : data) x = rng();   // full-width -> kRaw
+        roundtrip(data, 128, "raw-nodelta-u32");
+    }
+}
+
 int main()
 {
     test_zeros();
@@ -260,6 +294,7 @@ int main()
     test_various_n();
     test_64bit();
     test_sweep();
+    test_raw_delta();
 
     if (failures == 0)
         printf("All Layer 3 tests passed.\n");
