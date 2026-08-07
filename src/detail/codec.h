@@ -16,10 +16,10 @@
 #include "core/delta.h"
 
 // The scalar interleaved path is correct but ~3-4x slower on decode. Selecting
-// it by accident (e.g. because core/arch.h was not included and both macros
-// were silently undefined) is a performance cliff with no compile error, so it
-// must be opted into explicitly.
-#if !defined(ABPFOR_ARCH_X86) && !defined(ABPFOR_ARCH_ARM64) && !defined(ABPFOR_ALLOW_SCALAR_FALLBACK)
+// it by accident (e.g. because core/arch.h was not included, or because -mavx2
+// was left off an x86 build) is a performance cliff with no compile error, so
+// it must be opted into explicitly.
+#if !ABPFOR_ARCH_X86 && !ABPFOR_ARCH_ARM64 && !defined(ABPFOR_ALLOW_SCALAR_FALLBACK)
 #error "abpfor: no SIMD architecture detected. Define ABPFOR_ALLOW_SCALAR_FALLBACK to accept the slow scalar codec."
 #endif
 

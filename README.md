@@ -137,7 +137,26 @@ cmake --build build -j$(nproc)
 ctest --test-dir build
 ```
 
-Requires C++20, **clang 15+**, x86-64 with AVX2.
+Requires C++20, **clang 15+**. AVX2 is the intended target on x86-64.
+
+### Building without AVX2
+
+Without AVX2 (x86-64-v1/v2, or any other architecture) the scalar interleaved
+codec is selected instead. It produces byte-identical output and decodes
+AVX2-written streams, at roughly 3-4x the decode cost. To build and test that
+configuration:
+
+```bash
+cmake -B build-scalar -DCMAKE_BUILD_TYPE=Release -DABPFOR_ARCH_FLAGS=
+cmake --build build-scalar -j$(nproc)
+ctest --test-dir build-scalar
+```
+
+Both configurations must build warning-free and pass. `test_avx2_pack` and
+`test_avx2_fused` are skipped in the scalar build (they include `simd/avx2_*.h`
+directly); the remaining 13 tests exercise whichever kernel was selected
+through the public API, and `test_cross_platform` checks that the scalar and
+SIMD kernels agree byte-for-byte.
 
 ### Clang only
 

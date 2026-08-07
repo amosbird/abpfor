@@ -77,6 +77,18 @@ if(HAS_BRANCH_BOUNDS)
   list(APPEND ABPFOR_FLAGS -mbranches-within-32B-boundaries)
 endif()
 
+# Target ISA. AVX2 is the intended baseline on x86-64. Set this to empty to
+# build the scalar interleaved codec instead (correct, ~3-4x slower on decode):
+#
+#   cmake -DABPFOR_ARCH_FLAGS= -DABPFOR_WERROR=ON <src>
+#
+# That configuration is what a consumer targeting x86-64-v1/v2 gets, so it has
+# to keep building and passing the test suite.
+set(ABPFOR_ARCH_FLAGS "-mavx2" CACHE STRING "Target ISA flags (empty = scalar codec)")
+if(NOT ABPFOR_ARCH_FLAGS)
+  list(APPEND ABPFOR_FLAGS -DABPFOR_ALLOW_SCALAR_FALLBACK)
+endif()
+
 # ---------------------------------------------------------------------------
 # Library
 # ---------------------------------------------------------------------------
@@ -90,7 +102,7 @@ target_include_directories(abpfor PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-target_compile_options(abpfor PRIVATE ${ABPFOR_FLAGS} ${ABPFOR_WARNINGS} -mavx2)
+target_compile_options(abpfor PRIVATE ${ABPFOR_FLAGS} ${ABPFOR_WARNINGS} ${ABPFOR_ARCH_FLAGS})
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -100,7 +112,7 @@ enable_testing()
 function(abpfor_add_test name)
   add_executable(${name} tests/${name}.cpp)
   target_link_libraries(${name} PRIVATE abpfor)
-  target_compile_options(${name} PRIVATE ${ABPFOR_FLAGS} ${ABPFOR_WARNINGS} -mavx2)
+  target_compile_options(${name} PRIVATE ${ABPFOR_FLAGS} ${ABPFOR_WARNINGS} ${ABPFOR_ARCH_FLAGS})
   add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -111,11 +123,17 @@ abpfor_add_test(test_roundtrip)
 abpfor_add_test(test_sse_pack)
 abpfor_add_test(test_sse_fused)
 abpfor_add_test(test_api)
-abpfor_add_test(test_avx2_pack)
-abpfor_add_test(test_avx2_fused)
 abpfor_add_test(test_comprehensive)
 abpfor_add_test(test_cross_platform)
 abpfor_add_test(test_scalar_fallback)
 abpfor_add_test(test_interleaved64)
 abpfor_add_test(test_delta0)
 abpfor_add_test(test_narrowing)
+
+# These two include simd/avx2_*.h directly to unit-test the AVX2 kernels, so
+# they only exist when the build targets AVX2. Everything above goes through the
+# public API and covers whichever kernel arch.h selected.
+if(ABPFOR_ARCH_FLAGS MATCHES "avx2")
+  abpfor_add_test(test_avx2_pack)
+  abpfor_add_test(test_avx2_fused)
+endif()
