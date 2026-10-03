@@ -17,15 +17,21 @@
 // Block functions operate on exactly 128 or 256 elements (no n parameter).
 // Stream functions process n elements: full blocks via interleaved codec, tail via scalar.
 //
-// UNDEFINED BEHAVIOUR — this library is performance-first and validates nothing.
-// The caller owns every precondition below; violating any of them is UB, not an
-// error return:
+// UNDEFINED BEHAVIOUR — this library is performance-first and validates almost
+// nothing. The one exception is the block header: a decode whose header's
+// width fields would index past a dispatch table returns 0 instead of being UB
+// (see the first bullet below and RETURN VALUES). Every other precondition is
+// the caller's; violating any of them is UB, not an error return:
 //
 //   * Decode input must be a byte stream previously produced by the matching
-//     encode function. Decoding untrusted, truncated, or corrupted bytes is UB:
-//     the block header's 6-bit width field is used to index a 33-entry dispatch
-//     table with no bounds check, so a hostile header jumps through a wild
-//     pointer. Validate or authenticate your input before decoding it.
+//     encode function. Two corrupt cases are detected and reported instead of
+//     being UB, both by returning 0 (see RETURN VALUES): a block header whose
+//     width fields would index past the end of a dispatch table, and an outlier
+//     block whose position list names an element past the end of the block.
+//     Everything else about corrupt input remains UB -- a header can still send
+//     the decoder past the end of the buffer, and nothing checks that the block
+//     decoded is the block you asked for. Validate or authenticate your input
+//     before decoding it.
 //   * `out` must be large enough — size it with `maxCompressedSize`, not with a
 //     length a previous encode returned. Encode may touch bytes past the length
 //     it reports (a highly compressible block can report 4 bytes after writing a
@@ -50,6 +56,14 @@
 // [[nodiscard]]: the byte count is the only way to know where the next block
 // starts, so dropping it silently desynchronises the caller's cursor. Use
 // `std::ignore = ...` when a caller genuinely knows the length by other means.
+//
+// A decode that returns 0 has rejected the block: either one of the header's
+// width fields would have indexed past the end of a dispatch table, or the
+// outlier position list named an element past the end of the block. Either way
+// the block was not decoded. No other decode returns 0, since every valid block
+// consumes at least its own header byte, so 0 is unambiguous -- but a caller
+// that adds the count to a cursor without checking it will desynchronise and
+// silently mis-decode everything after the corrupt block.
 //
 // The count is `size_t` even for the single-block functions, whose output is
 // bounded by a compile-time constant (~2 KiB). Returning a narrower type there

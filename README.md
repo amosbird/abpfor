@@ -83,6 +83,16 @@ Advance a cursor with the count rather than reconstructing an end pointer —
 output base and decode the input base, so a swapped base compiles fine and
 corrupts silently.
 
+**A decode that returns 0 rejected the block.** Either the header's width fields
+would have indexed past the end of a dispatch table, or the outlier position list
+named an element past the end of the block (that one has a *valid* header — only
+the position list is corrupt). Either way nothing was decoded. No valid block
+returns 0 — every one consumes at least its own header byte — but a corrupt one
+does, and adding that 0 to a cursor silently mis-decodes everything after it.
+Check for 0 when the input is not known-good. The two reasons are not
+distinguishable from the return value; see the UB notes in `abpfor.h` for what is
+and is not checked.
+
 ### Decode buffer requirement
 
 The decode input buffer must have at least **3 readable bytes** past the compressed data (the unpacker loads full 64-bit words and discards overflow bits).
@@ -102,8 +112,10 @@ std::vector<uint32_t> partial(37);     // fewer than a block
 std::ignore = b256::decodeTail(in, 37, partial.data());
 ```
 
-This library validates nothing — the header lists every precondition the caller
-owns.
+This library validates almost nothing — with one exception: a block header whose
+width fields would index past a dispatch table makes the decoder return 0 rather
+than misbehave (see **Return values**). Everything else is a precondition the
+caller owns, listed in the header.
 
 Size an **encode** output buffer with `maxCompressedSize`, never with a length a
 previous encode returned. Encode may touch bytes past the length it reports — a

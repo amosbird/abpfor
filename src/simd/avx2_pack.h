@@ -199,8 +199,8 @@ inline const PackI8Fn kPackI8Table[33] = {
 // so no branch here could produce a non-AVX2 code path anyway).
 //
 // UB: b must be <= 32. Larger values index past the end of the dispatch table.
-// The caller owns input validation; decoding an untrusted byte stream without
-// first checking the header's bit-width field is undefined behaviour.
+// The block decoders check the header before dispatching here; calling these
+// kernels directly makes the check yours to make.
 inline const uint8_t* unpackI8(const uint8_t* in, uint32_t* out, unsigned b)
 {
     return detail::kUnpackI8Table[b](in, out);

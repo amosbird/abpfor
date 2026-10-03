@@ -304,6 +304,8 @@ template <bool Delta, bool Patch, bool MinusOne = false> struct FusedI8Table
 // AVX2 is a hard compile-time baseline; see avx2_pack.h.
 //
 // UB: b must be <= 32. Larger values index past the end of the dispatch table.
+// The block decoders check the header before dispatching here; calling these
+// kernels directly makes the check yours to make.
 template <bool Delta, bool Patch, bool MinusOne = false>
 inline void fusedDecodeI8(const uint8_t* in, uint32_t* out, unsigned b, uint32_t& carry, const uint64_t* bitmap,
                           const uint32_t* residuals)

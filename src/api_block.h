@@ -154,13 +154,32 @@ size_t apiEncodeDelta1(const T* in, unsigned n, uint8_t* out, T start)
     return static_cast<size_t>(op - out);
 }
 
+// A block decode that returns 0 rejected the block (see `abpfor.h`). The loops
+// below advance `pos` independently of the byte count, so without these checks a
+// rejected block would leave `ip` in place while `pos` moves on: the next
+// iteration decodes the same bad header again into a later slot, and the stream
+// returns a non-zero total, dressing up a corrupt stream as a partial success.
+
 template <unsigned BS, typename T>
 size_t apiDecode(const uint8_t* in, unsigned n, T* out)
 {
     const uint8_t* ip = in;
     unsigned pos = 0;
-    while (pos + BS <= n) { ip += apiDecodeBlock<BS>(ip, out + pos); pos += BS; }
-    if (pos < n) ip += apiDecodeTail<BS>(ip, n - pos, out + pos);
+    while (pos + BS <= n)
+    {
+        const size_t consumed = apiDecodeBlock<BS>(ip, out + pos);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+        pos += BS;
+    }
+    if (pos < n)
+    {
+        const size_t consumed = apiDecodeTail<BS>(ip, n - pos, out + pos);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+    }
     return static_cast<size_t>(ip - in);
 }
 
@@ -170,8 +189,21 @@ size_t apiDecodeDelta0(const uint8_t* in, unsigned n, T* out, T start)
     const uint8_t* ip = in;
     unsigned pos = 0;
     T carry = start;
-    while (pos + BS <= n) { ip += BlockTraits<BS>::template decodeBlockDelta<T, false>(ip, BS, out + pos, carry); pos += BS; }
-    if (pos < n) ip += apiDecodeTailDelta0<BS>(ip, n - pos, out + pos, carry);
+    while (pos + BS <= n)
+    {
+        const size_t consumed = BlockTraits<BS>::template decodeBlockDelta<T, false>(ip, BS, out + pos, carry);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+        pos += BS;
+    }
+    if (pos < n)
+    {
+        const size_t consumed = apiDecodeTailDelta0<BS>(ip, n - pos, out + pos, carry);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+    }
     return static_cast<size_t>(ip - in);
 }
 
@@ -181,8 +213,21 @@ size_t apiDecodeDelta1(const uint8_t* in, unsigned n, T* out, T start)
     const uint8_t* ip = in;
     unsigned pos = 0;
     T carry = start;
-    while (pos + BS <= n) { ip += BlockTraits<BS>::template decodeBlockDelta<T, true>(ip, BS, out + pos, carry); pos += BS; }
-    if (pos < n) ip += apiDecodeTailDelta1<BS>(ip, n - pos, out + pos, carry);
+    while (pos + BS <= n)
+    {
+        const size_t consumed = BlockTraits<BS>::template decodeBlockDelta<T, true>(ip, BS, out + pos, carry);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+        pos += BS;
+    }
+    if (pos < n)
+    {
+        const size_t consumed = apiDecodeTailDelta1<BS>(ip, n - pos, out + pos, carry);
+        if (consumed == 0)
+            return 0;
+        ip += consumed;
+    }
     return static_cast<size_t>(ip - in);
 }
 

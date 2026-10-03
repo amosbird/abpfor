@@ -431,12 +431,20 @@ ABPFOR_NOINLINE const uint8_t* decodeBitmapOutliersI4Full(const uint8_t* ip, uin
 }
 
 template <typename T, unsigned BS, bool UseDelta, bool MinusOne>
+// Returns nullptr if the block's position list is corrupt (see
+// `outlierPositionsValid`); the caller maps that to "rejected".
 ABPFOR_NOINLINE const uint8_t* decodeSparseOutliers(const uint8_t* ip, unsigned n, T* out, T& carry, unsigned b)
 {
     constexpr unsigned Words = BS / 64;
     unsigned pb = *ip++;
     unsigned oc = *ip++;
     const uint8_t* posPtr = ip;
+
+    // Guards both the scatter in applySparsePatch and the bitmap built from the
+    // same positions below.
+    if (!outlierPositionsValid(posPtr, oc, n))
+        return nullptr;
+
     ip += oc;
 
     alignas(32) uint32_t residuals[BS];
@@ -475,6 +483,10 @@ size_t decodeBlockI4_impl(const uint8_t* in, unsigned n, T* out, T& carry)
     uint8_t h = *ip++;
     uint8_t type = h & hdr::kTypeMask;
     unsigned b = h & hdr::kBitsMask;
+
+    // Reject a header whose width fields would index past a dispatch table.
+    if (!headerWidthsValid<T>(type, b, *ip))
+        return 0;
 
     if (type == hdr::kSpecial)
     {
@@ -552,7 +564,10 @@ size_t decodeBlockI4_impl(const uint8_t* in, unsigned n, T* out, T& carry)
 
         if (type == hdr::kSparseOutlier)
         {
-            ip = decodeSparseOutliers<T, 128, UseDelta, MinusOne>(ip, n, out, carry, b);
+            const uint8_t* res = decodeSparseOutliers<T, 128, UseDelta, MinusOne>(ip, n, out, carry, b);
+            if (!res)
+                return 0;
+            ip = res;
             return static_cast<size_t>(ip - in);
         }
     }
@@ -599,6 +614,10 @@ size_t decodeBlockI4_impl(const uint8_t* in, unsigned n, T* out, T& carry)
             unsigned pb = *ip++;
             unsigned oc = *ip++;
             const uint8_t* posPtr = ip;
+
+            if (!outlierPositionsValid(posPtr, oc, n))
+                return 0;
+
             ip += oc;
 
             alignas(16) T residuals[128];
@@ -733,6 +752,10 @@ size_t decodeBlockI8_impl(const uint8_t* in, unsigned n, T* out, T& carry)
     uint8_t type = h & hdr::kTypeMask;
     unsigned b = h & hdr::kBitsMask;
 
+    // Reject a header whose width fields would index past a dispatch table.
+    if (!headerWidthsValid<T>(type, b, *ip))
+        return 0;
+
     if (type == hdr::kSpecial)
     {
         if (b == hdr::kAllZero)
@@ -806,7 +829,10 @@ size_t decodeBlockI8_impl(const uint8_t* in, unsigned n, T* out, T& carry)
 
         if (type == hdr::kSparseOutlier)
         {
-            ip = decodeSparseOutliers<T, 256, UseDelta, MinusOne>(ip, n, out, carry, b);
+            const uint8_t* res = decodeSparseOutliers<T, 256, UseDelta, MinusOne>(ip, n, out, carry, b);
+            if (!res)
+                return 0;
+            ip = res;
             return static_cast<size_t>(ip - in);
         }
     }
@@ -853,6 +879,10 @@ size_t decodeBlockI8_impl(const uint8_t* in, unsigned n, T* out, T& carry)
             unsigned pb = *ip++;
             unsigned oc = *ip++;
             const uint8_t* posPtr = ip;
+
+            if (!outlierPositionsValid(posPtr, oc, n))
+                return 0;
+
             ip += oc;
 
             alignas(32) T residuals[256];

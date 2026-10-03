@@ -27,10 +27,11 @@ endif()
 # ---------------------------------------------------------------------------
 # Compile flags
 # ---------------------------------------------------------------------------
-# NDEBUG is set unconditionally: this library validates nothing by design (see
-# the UB notes in abpfor.h), so it carries no runtime asserts of its own, and
-# NDEBUG additionally disables any assertions the standard library headers would
-# otherwise compile in.
+# NDEBUG is set unconditionally: the only input checks this library carries are
+# the block-decoder validations -- the header width fields and the outlier
+# position list -- and neither is an assert (see the UB notes in abpfor.h), so
+# NDEBUG changes nothing about them and additionally disables any assertions the
+# standard library headers would otherwise compile in.
 set(ABPFOR_FLAGS
   -O3 -DNDEBUG -g
   -fstrict-aliasing -ffunction-sections -fdata-sections
@@ -129,6 +130,7 @@ abpfor_add_test(test_scalar_fallback)
 abpfor_add_test(test_interleaved64)
 abpfor_add_test(test_delta0)
 abpfor_add_test(test_narrowing)
+abpfor_add_test(test_corrupt_header)
 
 # These two include simd/avx2_*.h directly to unit-test the AVX2 kernels, so
 # they only exist when the build targets AVX2. Everything above goes through the

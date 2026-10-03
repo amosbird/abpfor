@@ -221,6 +221,55 @@ template <typename T> size_t encodeBlock(const T* in, unsigned n, uint8_t* out)
 }
 
 // ---------------------------------------------------------------------------
+// Header validation
+// ---------------------------------------------------------------------------
+// A block header carries two width fields that index fixed-size function-pointer
+// tables: the 6-bit `b` field, and for the two outlier types the residual width
+// `pb` in the byte right after the header. The tables hold kMaxBits<T> + 1
+// entries, so a header written by the encoder can never index past the end of
+// one -- but a corrupt or hostile byte stream can, and the result is a call
+// through a pointer read from just past the table. Rejecting the header costs
+// one not-taken branch on a value the header decode has already produced.
+//
+// `pb` is passed unconditionally: callers that have not consumed it yet pass the
+// byte following the header, which lies inside the read lookahead the API
+// already requires. Its value is ignored for the types that do not carry one.
+// ABPFOR_INLINE like the other small helpers in this file: this sits on the
+// bitpack-only hot path, ahead of the unpack kernel.
+template <typename T>
+ABPFOR_INLINE constexpr bool headerWidthsValid(uint8_t type, unsigned b, unsigned pb)
+{
+    // For kSpecial, `b` is a sub-type (all-zero / constant / raw), not a width.
+    if (type == hdr::kSpecial)
+        return true;
+    if (b > kMaxBits<T>)
+        return false;
+    if (type == hdr::kBitpackOnly)
+        return true;
+    // An outlier block shifts its residuals left by `b`, so b == kMaxBits<T>
+    // would be a shift by the type's width. The encoder never produces it: an
+    // outlier exists only where some value exceeds mask(b), i.e. maxBits > b.
+    return b < kMaxBits<T> && pb <= kMaxBits<T>;
+}
+
+// An outlier block's position list comes straight off the wire: the count is a
+// raw byte and every position is a raw byte, so a corrupt block can ask the
+// decoder to patch an element past the end of `out`, which holds only `n`
+// elements -- an out-of-bounds write at an attacker-chosen offset with an
+// attacker-chosen value. It is reachable through the tail APIs, whose `n` is
+// smaller than the block size, and whose callers size the output to `n`.
+// A correct encoder never writes more than `n` positions, and never one >= n.
+inline bool outlierPositionsValid(const uint8_t* positions, unsigned oc, unsigned n)
+{
+    if (oc > n)
+        return false;
+    for (unsigned i = 0; i < oc; ++i)
+        if (positions[i] >= n)
+            return false;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // decodeBlock — decode n values from a compressed block
 // ---------------------------------------------------------------------------
 // Returns bytes consumed.  Delta-1 variant: pass `start` to post-apply undelta.
@@ -243,6 +292,17 @@ template <typename T> size_t decodeBlockOutliers(const uint8_t* in, unsigned n, 
         unsigned bitmapBytes = divCeil(n, 8u);
         const uint8_t* bitmap = ip;
         ip += bitmapBytes;
+
+        // The bitmap covers 8 * bitmapBytes positions, which is more than n
+        // unless n is a multiple of 8, so a corrupt bitmap can set a bit past
+        // the end of `out`. Reject that here rather than per set bit in the
+        // merge loops: this way the check costs O(1) instead of one compare per
+        // outlier, and a rejected block leaves `out` untouched -- the merge
+        // loops below unpack into `out` before they would ever see a bad bit.
+        // n == 0 leaves bitmapBytes == 0 and skips the read.
+        const unsigned tailBits = n % 8u;
+        if (tailBits != 0u && (bitmap[bitmapBytes - 1] >> tailBits) != 0u)
+            return 0;
 
         // Count outliers via 64-bit popcount (faster than byte-by-byte)
         unsigned oc = 0;
@@ -304,6 +364,9 @@ template <typename T> size_t decodeBlockOutliers(const uint8_t* in, unsigned n, 
         const uint8_t* positions = ip;
         ip += oc;
 
+        if (!outlierPositionsValid(positions, oc, n))
+            return 0;
+
         // Save residuals start, skip past them
         const uint8_t* resPtr = ip;
         ip += packedBytes(oc, pb);
@@ -343,6 +406,10 @@ template <typename T> size_t decodeBlockDelta1(const uint8_t* in, unsigned n, T*
     uint8_t type = h & hdr::kTypeMask;
     unsigned b = h & hdr::kBitsMask;
 
+    // Reject a header whose width fields would index past a dispatch table.
+    if (!headerWidthsValid<T>(type, b, in[1]))
+        return 0;
+
     // Bitpack-only first: it is by far the most common block type, and it is
     // the only one whose work is large enough for a mispredicted branch here to
     // matter. Testing the two rare kSpecial cases ahead of it put two
@@ -377,6 +444,10 @@ template <typename T> size_t decodeBlockDelta1(const uint8_t* in, unsigned n, T*
     // Outlier path: decode base+exceptions, then apply delta.
     // Also handles kRaw blocks via decodeBlock's memcpy path.
     size_t consumed = decodeBlock(in, n, out);
+    // A rejected block leaves `out` untouched, so there is nothing to undelta --
+    // and reading it would be reading the caller's uninitialised memory.
+    if (consumed == 0)
+        return 0;
     for (unsigned i = 0; i < n; ++i) out[i] = (start += out[i]) + T(i + 1u);
     return consumed;
 }
@@ -385,6 +456,8 @@ template <typename T> size_t decodeBlockDelta1(const uint8_t* in, unsigned n, T*
 template <typename T> size_t decodeBlockDelta0(const uint8_t* in, unsigned n, T* out, T& carry)
 {
     size_t consumed = decodeBlock(in, n, out);
+    if (consumed == 0)
+        return 0;
     undelta0(out, n, carry);
     return consumed;
 }
@@ -397,6 +470,10 @@ template <typename T> size_t decodeBlock(const uint8_t* in, unsigned n, T* out)
     uint8_t h = *ip++;
     uint8_t type = h & hdr::kTypeMask;
     unsigned b = h & hdr::kBitsMask;
+
+    // Reject a header whose width fields would index past a dispatch table.
+    if (!headerWidthsValid<T>(type, b, *ip))
+        return 0;
 
     // --- Bitpack only (most common path, check first) ---
     if (type == hdr::kBitpackOnly) [[likely]]
